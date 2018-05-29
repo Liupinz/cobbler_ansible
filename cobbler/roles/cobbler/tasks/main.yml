@@ -1,0 +1,148 @@
+# install base package
+- name: install wget
+  yum: name=wget state=present
+
+#modify the hostname and add hosts file
+- name: use local repository
+  include: host-config.yml
+
+#disabled selinux
+- name: Update selinux config to Disabled mode
+  selinux: state=disabled
+
+- name: reboot system
+  shell: sleep 2 && shutdown -r now
+  async: 1
+  poll: 0
+
+- name: waiting for server come back
+  local_action: wait_for host={{ansible_host}} port=22 state=started delay=60 timeout=600
+  become: no
+
+# Configure source file
+- name: backup
+  shell: mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
+- name: download repel
+  shell: wget -O /etc/yum.repos.d/epel.repo http://mirrors.aliyun.com/repo/epel-7.repo
+- name: download repo
+  shell: wget -O /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+- name: yum makecache
+  shell: yum clean all && yum makecache
+
+# install base cobbler file
+- name: install base package
+  yum: name={{item}} state=present
+  with_items:
+      - httpd
+      - dhcp
+      - tftp
+      - rsync
+      - syslinux
+      - cobbler
+      - cobbler-web
+      - pykickstart
+      - xinetd
+      - libselinux-python
+      - fence-agents
+
+# enable the base service
+- name: enable service
+  service: name={{item}} state=started enabled=yes
+  with_items:
+      - cobblerd
+      - httpd
+      - xinetd
+      - tftp
+      - rsyncd
+
+# solve the "cobbler check" check
+- name: modify the settings
+  lineinfile: 
+      dest: /etc/cobbler/settings
+      regexp: '^server'
+      line: 'server: {{ansible_host}}'
+- name: modify the settings
+  lineinfile: 
+      dest: /etc/cobbler/settings
+      regexp: '^next_server'
+      line: 'next_server: {{ansible_host}}'
+- name: passwd
+  shell: openssl passwd -1 -salt 'root' '123456'
+  register: passwd
+- name: modify the settings
+  lineinfile:
+      dest: /etc/cobbler/settings
+      regexp: '^default_password_crypted'
+      line: 'default_password_crypted: "{{passwd.stdout}}"'
+
+- name: mkdify the tftp
+  template: src={{item.src}} dest={{item.dest}}
+  with_items:
+      - src: "files/tftp.j2"
+        dest: "/etc/xinetd.d/tftp"
+      - src: "files/dhcp.template.j2"
+        dest: "/etc/cobbler/dhcp.template"
+
+- name: get loaders
+  shell: cobbler get-loaders
+
+- name: start service
+  service: name={{item}} state=restarted
+  with_items:
+      - tftp
+      - cobblerd
+
+#- name: start dhcp
+#  shell: sed -i 's/manage_dhcp":" 0/manage_dhcp":" 1/g' /etc/cobbler/settings
+- name: start dhcp
+  lineinfile:
+      dest: /etc/cobbler/settings
+      regexp: 'manage_dhcp'
+      line: 'manage_dhcp: 1'
+
+- name: modify dhcp.template
+  template: src="files/dhcp.template.j2" dest="/etc/cobbler/dhcp.template"
+
+- name: modify tftp
+  lineinfile:
+      dest: /etc/cobbler/settings
+      regexp: '^manage_tftpd'
+      line: 'manage_tftpd: 1'
+
+- name: modify rsync
+  lineinfile:
+      dest: /etc/cobbler/settings
+      regexp: '^manage_rsync'
+      line: 'manage_rsync: 1'
+
+
+- name: restart cobblerd
+  service: name=cobblerd state=restarted
+
+- name: cobbler sync
+  shell: cobbler sync
+
+- name: Copy iso
+  copy: src="files/CentOS-7-x86_64-Minimal-1511.iso" dest="/root/"
+
+- name: input cobbler image
+  shell: mkdir /mnt/centos7.2_mini && mount -o loop /root/CentOS-7-x86_64-Minimal-1511.iso /mnt/centos7.2_mini/
+
+- name: Copy ks file
+  copy: src="files/centos7.2_mini.ks" dest="/var/lib/cobbler/kickstarts/"
+
+- name: input image
+  shell: cobbler import --path=/mnt/centos7.2_mini/ --name=centos7.2_minimal --kickstart=/var/lib/cobbler/kickstarts/centos7.2_mini.ks
+
+- name: modify the local
+  shell: cobbler system add --name=default --profile=centos7.2_minimal-x86_64
+
+- name: cobbler sync
+  shell: cobbler sync
+
+- name: edit file
+  lineinfile:
+      dest: /var/lib/tftpboot/pxelinux.cfg/default
+      regexp: '^TIMEOUT'
+      line: 'TIMEOUT 60'
+

@@ -1,0 +1,7 @@
+- name: Install cobbler 
+  hosts: all
+  vars_files:
+      - ./group_vars/all.yml
+  roles:
+      - cobbler
+

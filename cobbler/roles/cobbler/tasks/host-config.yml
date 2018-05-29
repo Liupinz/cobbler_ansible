@@ -1,0 +1,8 @@
+- name: set hostname
+  hostname: name={{inventory_hostname}}
+
+- name: add host file
+  lineinfile: 
+      dest: /etc/hosts
+      regexp: '^{{ansible_host}}'
+      line: '{{ansible_host}}    {{inventory_hostname}}'

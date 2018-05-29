@@ -1,0 +1,9 @@
+disable: no
+
+network: 10.130.128.0
+netmask: 255.255.255.0
+option_routers: 10.130.128.1
+domain_name_server: 114.114.114.114
+subnet_mask: 255.255.255.0
+rang_dynamic_start: 10.130.128.2
+rang_dynamic_end: 10.130.128.9
