@@ -2,6 +2,9 @@
 - name: install wget
   yum: name=wget state=present
 
+- name: install libselinux-python
+  yum: name=libselinux-python state=present
+
 #modify the hostname and add hosts file
 - name: use local repository
   include: host-config.yml
@@ -97,7 +100,7 @@
 - name: start dhcp
   lineinfile:
       dest: /etc/cobbler/settings
-      regexp: 'manage_dhcp'
+      regexp: '^manage_dhcp'
       line: 'manage_dhcp: 1'
 
 - name: modify dhcp.template
@@ -125,14 +128,29 @@
 - name: Copy iso
   copy: src="files/CentOS-7-x86_64-Minimal-1511.iso" dest="/root/"
 
-- name: input cobbler image
-  shell: mkdir /mnt/centos7.2_mini && mount -o loop /root/CentOS-7-x86_64-Minimal-1511.iso /mnt/centos7.2_mini/
+- name: mkdir
+  shell: mkdir /mnt/centos7.2_mini 
+
+- name: mkdir esxi
+  shell: mkdir /mnt/esxi6.0
+
+- name: mount
+  shell: mount -o loop /root/CentOS-7-x86_64-Minimal-1511.iso /mnt/centos7.2_mini/
+
+- name: mount esxi image
+  shell: mount -o loop /root/VMware-VMvisor-Installer-6.0.0.update03-5572656.x86_64.iso /mnt/esxi6.0/
 
 - name: Copy ks file
   copy: src="files/centos7.2_mini.ks" dest="/var/lib/cobbler/kickstarts/"
 
+- name: Copy esxi ks file
+  copy: src=files/esxi6.ks dest=/var/lib/cobbler/kickstarts/
+
 - name: input image
   shell: cobbler import --path=/mnt/centos7.2_mini/ --name=centos7.2_minimal --kickstart=/var/lib/cobbler/kickstarts/centos7.2_mini.ks
+
+- name: imput esxi image
+  shell: cobbler import --path=/mnt/esxi6.0/ --name=esxi-6.0 --kickstart=/var/lib/cobbler/kickstarts/esxi6.ks
 
 - name: modify the local
   shell: cobbler system add --name=default --profile=centos7.2_minimal-x86_64
