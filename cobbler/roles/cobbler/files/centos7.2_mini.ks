@@ -46,4 +46,6 @@ part / --fstype xfs --size 1 --grow --ondisk sda
 %end
 
 %post
+sed -i 's/^#UseDNS .*/UseDNS no/g' /etc/ssh/sshd_config
+sed -i 's/^GSSAPIAuthentication .*/GSSAPIAuthentication no/g' /etc/ssh/sshd_config
 %end
